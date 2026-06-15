@@ -1,0 +1,389 @@
+---
+title: "5. Bilingual Study Re-production"
+output: html_notebook
+Author: "Ayesha Zafar" 
+---
+
+# Packages Used
+
+```{r, message=FALSE}
+library(tidyverse)         # For data manipulation and visualization
+library(readxl)            # For reading Excel files
+library(boot)              # For bootstrapping
+library(gridExtra)
+``` 
+
+# Data Load
+
+This chunk loads the original Study 4 dataset and a translation table for Indian regions. It then reshapes the data to align English and Hindi response columns, matches language tags, recodes variables, and merges geographic state-level information.
+
+```{r}
+df4 <- read_excel("Data/Extracted_Data/MonetaryIncentives_Study4_RAW_India_deidentified.xlsx")
+indian_states <- read_excel("Tables/Translation_Table_India_Regions.xlsx")
+
+# Clean and reshape data to align English and Hindi responses
+# Pivot long to bring .E and .H columns into a single column
+# Filter to match language responses with column tags
+# Recode variables and merge state information (Living_State only)
+
+df4_clean <- df4 %>%
+  pivot_longer(cols = matches(".*\\.E$|.*\\.H$"),
+               names_pattern = "(.*)\\.(.)",
+               names_to = c(".value", "ColumnLanguage")) %>%
+  filter((language == "english" & ColumnLanguage == "E") |
+         (language == "hindi" & ColumnLanguage == "H")) %>%
+  mutate(
+    num_total_answers = as.numeric(num_total_answers),
+    Incentive = factor(incentive, levels = c("lowpay", "norm"),
+                       labels = c("Monetary", "Norm")),
+    Language = factor(language, levels = c("english", "hindi"),
+                      labels = c("English", "Hindi")),
+    HHIncome_Numeric = case_when(
+      HHIncome == 1 ~ 125000,
+      HHIncome == 2 ~ 375000,
+      HHIncome == 3 ~ 750000,
+      HHIncome == 4 ~ 1250000,
+      HHIncome == 5 ~ 1750000
+    ),
+    HHIncome = factor(HHIncome,
+                      levels = 1:8,
+                      labels = c("Income: Less than ₹2.5 lakhs",
+                                 "Income: ₹2.5 lakhs to ₹4.9 lakhs",
+                                 "Income: ₹5 lakhs to ₹9.9 lakhs",
+                                 "Income: ₹10 lakhs to ₹14.9 lakhs",
+                                 "Income: ₹15 lakhs and above",
+                                 "Income: Not working",
+                                 "Income: Student",
+                                 "Income: Retired"))) %>%
+  left_join(indian_states, by = c("Living_State" = "Index")) %>%
+  mutate(Living_State = `State/UT`) %>%
+  select(-`State/UT`)
+
+# Subset only monetary incentive condition
+df4_monetary <- df4_clean %>% filter(Incentive == "Monetary")
+```
+
+# SES Analysis
+
+This section compares English vs. Hindi performance differences by subjective SES. It creates a median split for SES, calculates groupwise means, and then uses bootstrapping to compute standard errors around those means.
+
+```{r}
+df_ses <- df4_monetary %>%
+  mutate(Median_Split_SES = ifelse(SubjectiveSES <= median(SubjectiveSES, na.rm = TRUE),
+                                   "Below Median", "Above Median"))
+
+# Function to calculate bootstrapped SEs
+bootstrap_se <- function(data, indices) {
+  d <- data[indices, ]
+  mean(d$diff, na.rm = TRUE)
+}
+
+# Calculate true group means and differences
+ses_diff <- df_ses %>%
+  filter(!is.na(Median_Split_SES)) %>%
+  group_by(Median_Split_SES, Language) %>%
+  summarise(mean_ans = mean(num_total_answers, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = Language, values_from = mean_ans) %>%
+  mutate(diff = English - Hindi)
+
+# Bootstrap only SEs
+ses_boot <- df_ses %>%
+  filter(Language %in% c("English", "Hindi")) %>%
+  group_split(Median_Split_SES) %>%
+  map_dfr(function(group) {
+    cat_name <- unique(group$Median_Split_SES)
+    group_wide <- group %>%
+      group_by(Language) %>%
+      summarise(mean = mean(num_total_answers, na.rm = TRUE), .groups = "drop") %>%
+      pivot_wider(names_from = Language, values_from = mean)
+    true_diff <- group_wide$English - group_wide$Hindi
+    b <- boot(data = group, statistic = function(d, i) {
+      sample <- d[i, ]
+      mean(sample$num_total_answers[sample$Language == "English"], na.rm = TRUE) -
+        mean(sample$num_total_answers[sample$Language == "Hindi"], na.rm = TRUE)
+    }, R = 1000)
+    tibble(
+      Median_Split_SES = cat_name,
+      diff = true_diff,
+      se_diff = sd(b$t)
+    )
+  })
+
+# Ensure factor order
+ses_boot <- ses_boot %>%
+  filter(!is.na(Median_Split_SES)) %>%
+  mutate(Median_Split_SES = factor(Median_Split_SES, levels = c("Below Median", "Above Median")))
+
+# Plot
+plot1 <- ggplot(ses_boot, aes(x = Median_Split_SES, y = diff, fill = Median_Split_SES)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_errorbar(aes(ymin = diff - se_diff, ymax = diff + se_diff), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  scale_fill_manual(values = c("Below Median" = "#a1d99b", "Above Median" = "#006d2c")) +
+  theme_minimal() +
+  labs(x = "Subjective SES", y = "Mean Difference (English - Hindi)", title = "Mean Difference in Performance by SES")
+
+
+```
+
+# Testing Statistical Difference for SES 
+
+This chunk tests whether the effect of language (English vs. Hindi) on total answers differs significantly between subjective SES groups. We implement a bootstrap procedure to estimate the standard error and 95% confidence interval of the difference-in-differences (DiD) — the gap in language effects between "Above Median" and "Below Median" SES groups. A statistically significant result would indicate that SES moderates the language-performance relationship.
+
+```{r}
+
+# Filter and prepare data
+df_did <- df_ses %>%
+  filter(Language %in% c("English", "Hindi"), !is.na(Median_Split_SES))
+
+# Bootstrap function for DiD
+did_bootstrap <- function(data, indices) {
+  d <- data[indices, ]
+  d_above <- d %>% filter(Median_Split_SES == "Above Median")
+  d_below <- d %>% filter(Median_Split_SES == "Below Median")
+  
+  diff_above <- mean(d_above$num_total_answers[d_above$Language == "English"], na.rm = TRUE) -
+                mean(d_above$num_total_answers[d_above$Language == "Hindi"], na.rm = TRUE)
+  
+  diff_below <- mean(d_below$num_total_answers[d_below$Language == "English"], na.rm = TRUE) -
+                mean(d_below$num_total_answers[d_below$Language == "Hindi"], na.rm = TRUE)
+  
+  return(diff_above - diff_below)
+}
+
+# Run bootstrap
+set.seed(123)
+library(boot)
+did_result <- boot(data = df_did, statistic = did_bootstrap, R = 1000)
+
+# Confidence interval
+did_ci <- boot.ci(did_result, type = "perc")$percent[4:5]
+
+# Output
+list(
+  diff_in_diff = mean(did_result$t),
+  se = sd(did_result$t),
+  ci_lower = did_ci[1],
+  ci_upper = did_ci[2],
+  significant = ifelse(did_ci[1] > 0 | did_ci[2] < 0, "Yes", "No")
+)
+
+```
+
+# Income Analysis
+
+This section bootstraps the standard errors of English-Hindi differences in number of answers by household income category, excluding non-working, student, and retired participants.
+
+```{r}
+# Exclude non-working/student/retired categories
+excluded_levels <- c("Income: Not working", "Income: Student", "Income: Retired", "Income: ₹15 lakhs and above")
+
+df_income <- df4_monetary %>%
+  filter(!(HHIncome %in% excluded_levels),
+         Language %in% c("English", "Hindi"),
+         !is.na(num_total_answers)) %>%
+  mutate(HHIncome = factor(HHIncome, ordered = TRUE))
+
+# Define bootstrap_diff function
+bootstrap_diff <- function(data, indices) {
+  d <- data[indices, ]
+  mean(d$num_total_answers[d$Language == "English"], na.rm = TRUE) -
+    mean(d$num_total_answers[d$Language == "Hindi"], na.rm = TRUE)
+}
+
+# Bootstrap by each income level
+income_levels <- levels(df_income$HHIncome)
+
+income_boot <- lapply(income_levels, function(level) {
+  group_data <- df_income %>% filter(HHIncome == level)
+  if (nrow(group_data) >= 10 && length(unique(group_data$Language)) == 2) {
+    # True mean difference
+    true_diff <- mean(group_data$num_total_answers[group_data$Language == "English"], na.rm = TRUE) -
+      mean(group_data$num_total_answers[group_data$Language == "Hindi"], na.rm = TRUE)
+    
+    # Bootstrap SE
+    b <- boot(data = group_data, statistic = bootstrap_diff, R = 1000)
+    
+    tibble(
+      HHIncome = level,
+      diff = true_diff,
+      se_diff = sd(b$t)
+    )
+  } else {
+    tibble(HHIncome = level, diff = NA, se_diff = NA)
+  }
+})
+
+plot2_data <- bind_rows(income_boot) %>%
+  mutate(HHIncome = factor(HHIncome, levels = income_levels))
+
+# Plot income-wise bootstrapped differences
+plot2 <- ggplot(plot2_data, aes(x = HHIncome, y = diff, fill = HHIncome)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_errorbar(aes(ymin = diff - se_diff, ymax = diff + se_diff), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  theme_minimal() +
+  labs(
+    x = NULL,  # Removes x-axis label
+    y = " Mean Difference (English - Hindi)",
+    title = "Mean difference in Performance by Income",
+    fill = "Income Group"  # Title for the legend
+  ) +
+  theme(
+    axis.text.x = element_blank(),         # Remove x-axis tick labels
+    axis.ticks.x = element_blank(),        # Remove x-axis ticks
+    legend.position = "right",             # Move legend to the right
+    legend.title = element_text(size = 11),
+    legend.text = element_text(size = 10),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 11),
+    axis.title = element_text(size = 12)
+  )
+
+print(plot2)
+```
+
+```{r}
+
+# Recalculate Median_Split_SES in case not inherited
+df_ses_income <- df4_monetary %>%
+  filter(!(HHIncome %in% excluded_levels),
+         !is.na(SubjectiveSES)) %>%
+  mutate(Median_Split_SES = ifelse(SubjectiveSES <= median(SubjectiveSES, na.rm = TRUE),
+                                   "Below Median", "Above Median"))
+
+# Calculate fraction of each income group in Below Median SES
+income_ses_fraction <- df_ses_income %>%
+  group_by(HHIncome) %>%
+  summarise(
+    total = n(),
+    below_median = sum(Median_Split_SES == "Below Median"),
+    frac_below = below_median / total
+  ) %>%
+  mutate(HHIncome = factor(HHIncome, levels = levels(df_income$HHIncome), ordered = TRUE))
+
+# Plot
+library(ggplot2)
+
+ses_frac_plot <- ggplot(income_ses_fraction, aes(x = HHIncome, y = frac_below, fill = HHIncome)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+  labs(
+    x = "Income Group",
+    y = "Fraction with Below Median Subjective SES",
+    title = "Proportion of Participants with Low Subjective SES by Income Group"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+print(ses_frac_plot)
+
+```
+
+
+# Regional Analysis
+
+This section bootstraps English-Hindi differences by Indian state, grouping small samples as "Other", and ranks them by distance to the equator.
+
+```{r}
+focus_states <- c("Delhi", "Haryana", "Rajasthan", "Uttar Pradesh", "Bihar")
+
+df_region <- df4_monetary %>%
+  mutate(State_Grouped = if_else(Living_State %in% focus_states, Living_State, "Other")) %>%
+  filter(Language %in% c("English", "Hindi"), !is.na(num_total_answers))
+
+states <- unique(df_region$State_Grouped)
+
+region_boot <- lapply(states, function(state) {
+  data_state <- df_region %>% filter(State_Grouped == state)
+  if (length(unique(data_state$Language)) == 2 && nrow(data_state) >= 10) {
+    b <- boot(data = data_state, statistic = bootstrap_diff, R = 1000)
+    tibble(State = state, diff = mean(data_state$num_total_answers[data_state$Language == "English"], na.rm = TRUE) -
+                         mean(data_state$num_total_answers[data_state$Language == "Hindi"], na.rm = TRUE),
+           se_diff = sd(b$t))
+  } else {
+    tibble(State = state, diff = NA, se_diff = NA)
+  }
+})
+
+plot3_data <- bind_rows(region_boot) %>%
+  left_join(indian_states %>% select(`State/UT`, Latitude), by = c("State" = "State/UT")) %>%
+  mutate(Distance_to_Equator = abs(Latitude))
+
+plot3 <- ggplot(plot3_data, aes(x = reorder(State, Distance_to_Equator), y = diff, fill = State)) +
+  geom_col(color = "black", show.legend = FALSE) +
+  geom_errorbar(aes(ymin = diff - se_diff, ymax = diff + se_diff), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  theme_minimal() +
+  labs(x = "State", y = "Mean Difference (English - Hindi)", title = "Mean difference in Performance Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Regional Analysis by Years Lived
+
+This section further splits state-level differences by whether participants have lived in their current state above or below the median duration.
+
+```{r}
+df_lived <- df_region %>%
+  filter(!is.na(Living_Yr)) %>%
+  mutate(Living_Years_Split = if_else(Living_Yr <= median(Living_Yr, na.rm = TRUE),
+                                      "Below Median", "Above Median"))
+
+region_split_keys <- df_lived %>% distinct(State_Grouped, Living_Years_Split)
+
+region_lived_boot <- region_split_keys %>%
+  group_split(State_Grouped, Living_Years_Split) %>%
+  purrr::map_dfr(function(g) {
+    state <- unique(g$State_Grouped)
+    split <- unique(g$Living_Years_Split)
+    subset_data <- df_lived %>% filter(State_Grouped == state, Living_Years_Split == split)
+    if (length(unique(subset_data$Language)) == 2 && nrow(subset_data) >= 10) {
+      b <- boot(data = subset_data, statistic = bootstrap_diff, R = 1000)
+      tibble(State = state, Split = split,
+             diff = mean(subset_data$num_total_answers[subset_data$Language == "English"], na.rm = TRUE) -
+                    mean(subset_data$num_total_answers[subset_data$Language == "Hindi"], na.rm = TRUE),
+             se_diff = sd(b$t))
+    } else {
+      tibble(State = state, Split = split, diff = NA, se_diff = NA)
+    }
+  }) %>%
+  left_join(indian_states %>% select(`State/UT`, Latitude), by = c("State" = "State/UT")) %>%
+  mutate(Distance_to_Equator = abs(Latitude),
+         Split = factor(Split, levels = c("Below Median", "Above Median")))
+
+plot4 <- ggplot(region_lived_boot, aes(x = reorder(State, Distance_to_Equator), y = diff, fill = Split)) +
+  geom_col(position = position_dodge(width = 0.7), color = "black", width = 0.6) +
+  geom_errorbar(aes(ymin = diff - se_diff, ymax = diff + se_diff),
+                width = 0.2, position = position_dodge(width = 0.7)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  scale_fill_manual(values = c("Below Median" = "#a1d99b", "Above Median" = "#006d2c")) +
+  theme_minimal() +
+  labs(x = "State", y = "Mean Difference (English - Hindi)",
+       title = "Mean difference in Performance by Years Lived in Region", fill = "Years Lived") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(plot3)
+print(plot4)
+```
+
+# Final Plots
+
+This section exports the final sets of visualisations as PDF files for presentation or publication. 
+
+```{r}
+# Save combined plots
+pdf("Figures/Bilingual_Study_Graphs_Income.pdf", width = 11, height = 8.5)
+grid.arrange(plot1, plot2 ,ncol = 1)
+dev.off()
+
+pdf("Figures/Bilingual_Study_Graphs_Region.pdf", width = 11, height = 8.5)
+grid.arrange(plot3, plot4 ,ncol = 1)
+dev.off()
+
+pdf("Figures/Bilingual_Income_SES_Distribution.pdf", , width = 11, height = 8.5)
+print(ses_frac_plot)
+dev.off
+```

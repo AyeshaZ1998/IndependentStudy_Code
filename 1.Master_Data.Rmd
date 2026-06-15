@@ -1,0 +1,557 @@
+---
+title: "1.Master_Data"
+output: html_notebook
+---
+
+#Script Description 
+
+The purpose of this script is to consolidate data sourced from multiple published papers/data sets into a master file. 
+
+# Packages Used
+
+```{r, message=FALSE}
+
+library(foreign)
+library(tidyverse)
+library(readxl)
+library(haven)
+library(curl)
+library(dplyr)
+
+
+
+```
+
+
+# Data set 1 - Work Hour Elasticity 
+
+This dataset is derived from the paper "How Hours Worked Vary with Income? Cross-Country Evidence and Implications" by Bick, Fuchs-Schündeln, and Lagakos (2017). It provides country-level estimates of labor supply elasticity, capturing how hours worked respond to changes in wages across different economies. 
+
+```{r}
+
+
+htw_elasticity <- read_dta("Data/Extracted_Data/elasticity_country_level.dta")
+
+# Load master statistics data to obtain country names
+bick_elasticity_master_stats <- read.dta("Data/Extracted_Data/elasticity_master_stats.dta") %>%
+  select(country, countryname) #selecting relevant variables
+
+# Merge elasticity data with master statistics to add country names
+htw_elasticity <- htw_elasticity %>%
+  left_join(bick_elasticity_master_stats, by = "country") %>% #joining datasets by country code
+  rename(elasticity_male = beta_m, # Rename beta_m to elasticity_male for clarity
+         elasticity_female = beta_f, # Rename beta_f to elasticity_female for clarity
+         country_code = country) %>% # Rename country to country_code for better readability
+  select(countryname, everything()) %>% # Ensure countryname is the first column
+  filter(!country_code %in% c("USA-1895", "USA-1973", "USA-1991")) # exclude irrelevant rows
+
+```
+
+
+# Data Set 2 - Cultural Distance
+
+This dataset is derived from "Beyond Western, Educated, Industrial, Rich, and Democratic (WEIRD) Psychology: Measuring and Mapping Scales of Cultural and Psychological Distance" by Muthukrishna et al. (2020). It provides country-level measures of cultural and psychological distance, quantifying differences between societies based on cognitive, social, and behavioral factors. The data includes cultural distance metrics relative to the U.S. and China. 
+
+
+```{r}
+
+# Load cultural distance data for the U.S. and China from an Excel file
+cfst_data_us_china <- read_excel("Data/Extracted_Data/cultural_distance_US_America.xlsx")
+
+# Rename the 'Country' column to 'countryname' for consistency across datasets
+cfst_data_us_china_clean <- cfst_data_us_china %>% 
+  rename(countryname = Country)
+
+```
+
+
+# Data Set 3 - World Management Survey 
+
+This dataset is derived from the World Management Survey (WMS) and focuses on two key aspects of workplace management: performance culture (Section 15) and talent management (Section 14). Performance culture measures how firms implement goal-setting, accountability, and evaluation mechanisms, while talent management assesses hiring, training, and workforce development practices. The data is aggregated at the country level, providing mean scores for these dimensions.
+
+```{r}
+
+# Load Workplace Management Survey (WMS) data from a CSV file
+wms_data <- read_csv("Data/Extracted_Data/wmsdata_2004_2015.csv")
+
+# Clean and summarize WMS data
+wms_data_clean <-
+  wms_data %>% 
+  select(country, talent2, talent3) %>%  # Select relevant columns
+  group_by(country) %>% # Group data by country
+  summarize("bonus_culture_prevalence" = mean(talent2, na.rm = TRUE), # Compute the mean of talent2 for performance culture
+            "shirk_tolerance" = mean(talent3, na.rm = TRUE) # Compute the mean of talent3 for talent management
+            ) %>%
+  rename(countryname = country) # Rename country column for consistency
+
+
+# --- Sample Size Calculations for Summary Table ---
+
+# Calculate the total sample size by summing 'N' across all entries
+summarize(wms_data, total_sample = sum(N))
+
+# Count the number of unique countries in the dataset
+length(unique(wms_data$country))
+
+# Calculate the total sum of 'N' for each country
+wms_data %>%
+  group_by(country) %>%
+  summarise(total_sum = sum(N, na.rm = TRUE))
+```
+
+#Data set 4 - Tightness-Looseness score for Non-industrial Countries 
+
+This dataset is derived from "A Global Analysis of Cultural Tightness in Non-Industrial Societies" by Jackson, Gelfand, and Ember (2020). It provides measures of cultural tightness-looseness across non-industrial societies, capturing the extent to which social norms are strictly enforced and deviance is tolerated. 
+
+```{r}
+
+# Load non-industrial tightness-looseness data from a CSV file
+nonindustrial_social_tightness <- read.csv("Data/Extracted_Data/non-industrial_tightness.csv")
+  
+
+```
+
+#Data set 5 - GDP per Capita
+
+This dataset is sourced from the World Bank and provides GDP per capita estimates for countries worldwide. 
+
+```{r}
+
+# Load GDP per capita data from the World Bank CSV file, skipping the first 4 rows (metadata)
+gdp_wb <- read.csv("Data/Extracted_Data/gdp_per_capita_WB.csv", 
+                   skip = 4)
+
+# Clean and rename GDP dataset
+gdp_wb_clean <-  
+  gdp_wb %>%
+  select(Country.Name, X2020, X2021) %>% # Select relevant columns for GDP per capita in 2020 and 2021
+  rename( countryname = Country.Name, # Standardize country name column
+          gdp_pc_2020 = X2020, # Rename GDP per capita for 2020
+          gdp_pc_2021 = X2021) # Rename GDP per capita for 2021
+
+# Load World Bank metadata containing country income classifications
+country_income_class_wb <- read_csv("Data/Extracted_Data/incomeclass_WB.csv")%>%
+  select(TableName, IncomeGroup) %>% # Select relevant columns
+  rename(countryname = TableName) # Standardize country name column for merging
+
+# Merge GDP data with income group classifications
+gdp_wb_clean <- gdp_wb_clean %>%
+  right_join(country_income_class_wb, by = "countryname") %>%
+  filter(!is.na(IncomeGroup))  # Remove any rows where income classification is missing
+
+```
+
+
+#Data Set 6 - Tightness-Looseness score for Industrial Countries 
+
+
+This dataset is derived from "Differences Between Tight and Loose Cultures: A 33-Nation Study" by Gelfand et al. (2011). It provides tightness-looseness scores for 33 countries, measuring the degree to which societies enforce social norms and tolerate deviation. Tighter cultures exhibit strong norms and lower tolerance for deviant behavior, while looser cultures allow for greater flexibility and individual expression.
+
+
+```{r}
+
+# Load industrial societal norm tightness data from an Excel file
+industrial_social_tightness <- read_excel("Data/Extracted_Data/industrual_tightness.xlsx")
+
+#cleaning the dataset 
+industrial_tightness_clean <- industrial_social_tightness %>%
+  select(Nation, `Tightness score`) %>% #selecting relevant columns 
+  rename(countryname = Nation, # Standardize country name column
+         tightness_score = `Tightness score`) # Rename tightness score column for clarity
+
+# Remove the 33rd row from the dataset which is a total columns so its irrelevant
+industrial_tightness_clean <- industrial_tightness_clean[-33, ]
+  
+```
+
+
+#Data set 7 - Economic Preferences 
+
+This dataset is derived from "Global Evidence on Economic Preferences" by Falk et al. (2018). It provides country-level measures of economic preferences, including patience, risk-taking, positive and negative reciprocity, altruism, and trust. 
+
+```{r}
+
+# Load economic preferences dataset from a .dta file
+economic_preferences <-
+  read_dta("Data/Extracted_Data/economicpreferences_country.dta")
+
+# Clean and rename columns for consistency
+economic_preferences_clean <- economic_preferences %>%
+  rename(countryname = country,
+         preferences_patience = patience,
+         preferences_risktaking = risktaking,
+         preferences_posrecip = posrecip,
+         preferences_negrecip = negrecip,
+         preferences_altruism = altruism,
+         preferences_trust = trust,
+         countrycode = isocode
+         ) %>%
+  select(-countrycode) # Removing repetitive column
+
+```
+
+
+# Data Set 8 - Responsibilism 
+
+```{r}
+
+responsibilism <- read_excel("Data/Extracted_Data/Responsibilism Country Scores.xlsx")  %>%
+  rename(countryname = Culture)
+
+```
+
+# Data Set 9 - Universalism 
+
+This data set is extracted from Universalism: Global Evidence by Cappelen, Enke and Tungodden (2025). It provided country level estimate of universalism. 
+
+```{r}
+
+universalism <- read_excel("Data/Extracted_Data/Universalism.xlsx")
+
+```
+
+# Data Set 10 - Total Factor Productivty 
+
+```{r}
+
+tfp <- read_excel("Data/Extracted_Data/penn_world_tables.xlsx", sheet = "Data") 
+
+tfp_clean <- tfp %>%
+  select(country, year, ctfp) %>%
+  filter(year == 2019) %>%
+  rename(countryname = country, 
+         total_factor_productivity = ctfp) %>%
+  select(countryname, total_factor_productivity) %>%
+  drop_na()
+
+
+
+```
+
+# Data Set 11 - Individualism
+
+```{r}
+
+individualism <- read_csv("Data/Extracted_Data/individualism_culturaldistance.csv")
+
+```
+
+# Data Set 12 - Tightness_Looseness 
+
+```{r}
+
+tight_loose_cd <- read_excel("Data/Extracted_Data/tightness_looseness_culturaldistance.xlsx") %>%
+  rename(tight_loose_cd = tight_loose)
+
+```
+
+# Translation Table 
+
+The Translation Table file serves as a standardized mapping of country names across multiple datasets to ensure consistency in data consolidation. By aligning country names across datasets, it facilitates accurate merging and cross-country comparisons, ensuring that data from different sources can be integrated seamlessly.
+
+```{r}
+
+# Load the country translation table from an Excel file
+country_translation_table <- read_excel("Data/Extracted_Data/Translation_Table_Countries.xlsx")
+
+```
+
+
+# Consolidated Dataset 
+
+
+This chunk of code matches each dataset to the translation table, standardizing country names where discrepancies exist. The cleaned datasets are then merged into a consolidated dataset containing all extracted variables. Finally, the script removes redundant country code columns, organizes the data for clarity, and ensures that only countries with valid data are retained.
+
+
+```{r}
+
+# Standardizing country names in the htw_elasticity dataset
+htw_elasticity <- htw_elasticity %>%
+  left_join(country_translation_table %>% 
+              select("elasticity", "universal_name", "ISO_code"), by = c("countryname" = "elasticity")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the cultural distance dataset
+cfst_data_us_china_clean <- cfst_data_us_china_clean %>%
+  left_join(country_translation_table %>% 
+              select("cultural_distance", "universal_name", "ISO_code"), by = c("countryname" = "cultural_distance")) %>% 
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the workplace management survey (WMS) dataset
+wms_data_clean <- wms_data_clean %>%
+  left_join(country_translation_table %>% 
+              select("wms", "universal_name", "ISO_code"), by = c("countryname" = "wms")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the industrial tightness dataset
+industrial_tightness_clean <- industrial_tightness_clean %>%
+  left_join(country_translation_table %>% 
+              select("industrial_tightness", "universal_name", "ISO_code"), by = c("countryname" = "industrial_tightness")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the GDP dataset
+gdp_wb_clean <- gdp_wb_clean %>%
+  left_join(country_translation_table %>% 
+              select("gdp", "universal_name", "ISO_code"), by = c("countryname" = "gdp")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the economic preferences dataset
+economic_preferences_clean <- economic_preferences_clean %>%
+  left_join(country_translation_table %>% 
+              select("economic_preferences", "universal_name", "ISO_code"), by = c("countryname" = "economic_preferences")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the responsibilism dataset
+responsibilism_clean <- responsibilism %>%
+  left_join(country_translation_table %>% 
+              select("responsibilism", "universal_name", "ISO_code"), by = c("countryname" = "responsibilism")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the universalism dataset
+universalism_clean <- universalism %>%
+  left_join(country_translation_table %>% 
+              select("universalism", "universal_name", "ISO_code"), by = c("countryname" = "universalism")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the TFP dataset
+tfp_clean <- tfp_clean %>%
+  left_join(country_translation_table %>% 
+              select("tfp_names", "universal_name", "ISO_code"), by = c("countryname" = "tfp_names")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the Individualism dataset
+individualism <- individualism %>%
+  left_join(country_translation_table %>% 
+              select("Individualism", "universal_name", "ISO_code"), by = c("countryname" = "Individualism")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+# Standardizing country names in the Tight-Loose Distance dataset
+tight_loose_cd <- tight_loose_cd %>%
+  left_join(country_translation_table %>% 
+              select("Individualism", "universal_name", "ISO_code"), by = c("countryname" = "Individualism")) %>%
+  mutate(countryname = if_else(!is.na(universal_name), universal_name, countryname)) %>% #replace countryname with universal name
+  select(-universal_name) # Remove the temporary universal name column
+
+
+# --- Consolidating all datasets into one master dataset ---
+combined_data <- 
+  full_join(htw_elasticity, cfst_data_us_china_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(wms_data_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(industrial_tightness_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(economic_preferences_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(responsibilism_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(universalism_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(tfp_clean, by = c("countryname", "ISO_code")) %>%
+  full_join(individualism, by = c("countryname", "ISO_code")) %>%
+  full_join(tight_loose_cd, by = c("countryname", "ISO_code")) %>%
+  left_join(gdp_wb_clean, by = c("countryname", "ISO_code")) %>% # Left join to keep all previously matched data
+  filter(!if_all(everything(), is.na)) # Remove rows where all values are missing
+
+
+# --- Final Cleaning and Organization ---
+combined_data <- combined_data %>% 
+  select(-country_code) %>% # Remove redundant country_code column
+  arrange(countryname, ISO_code) %>% # Sort by country name and ISO code
+  select(countryname, ISO_code, everything()) # Ensure countryname and ISO_code appear first
+ 
+
+```
+
+
+# Calculating Pairwise overlap of Countries between datasets
+
+This code identifies the number of overlapping countries across selected variables, ensuring that data availability is assessed for cross-country comparisons. It generates tables that count the number of shared observations for variable pairs, both overall and within different income groups. Additionally, it creates a detailed list of countries with available data for each variable pair, facilitating a structured analysis of data completeness.
+
+```{r}
+
+# Function to count overlapping countries for each pair of selected variables
+count_overlapping_countries <- function(data, columns) {
+  columns <- columns[columns %in% colnames(data)] # Ensure selected columns exist in the dataset
+    results <- data.frame(Variable1 = character(), Variable2 = character(), Overlapping_Countries = integer())
+
+  # Iterate over each pair of columns
+  for (i in 1:(length(columns) - 1)) {
+    for (j in (i + 1):length(columns)) {
+      var1 <- columns[i]
+      var2 <- columns[j]
+
+      # Count the number of countries that have non-missing values for both variables
+      count_overlap <- data %>%
+        filter(!is.na(.data[[var1]]) & !is.na(.data[[var2]])) %>%
+        nrow()
+      results <- rbind(results, data.frame(Variable1 = var1, Variable2 = var2, Overlapping_Countries = count_overlap))
+    }
+  }
+        # Store results in a dataframe
+
+  return(results)
+}
+
+# Define the selected variables for overlap analysis
+selected_columns <- c("elasticity_male", "america_cfst", "bonus_culture_prevalence", "tightness_score", "preferences_patience", "gdp_pc_2021", "Responsibilism", "total_factor_productivity", "composite_universalism", "Individualism", "tight_loose")
+
+# Compute the overlap table
+overlap_table <- count_overlapping_countries(combined_data, selected_columns)
+
+
+# Function to count overlapping countries grouped by income classification
+count_overlapping_countries_by_income <- function(data, columns, income_column) {
+  columns <- columns[columns %in% colnames(data)]
+  results <- data.frame(Variable1 = character(), Variable2 = character(), IncomeGroup = character(), Overlapping_Countries = integer())
+
+  for (i in 1:(length(columns) - 1)) {
+    for (j in (i + 1):length(columns)) {
+      var1 <- columns[i]
+      var2 <- columns[j]
+      
+      # Count the number of overlapping countries within each income group
+      income_overlap <- data %>%
+        filter(!is.na(.data[[var1]]) & !is.na(.data[[var2]])) %>%
+        group_by(.data[[income_column]]) %>%
+        summarise(Overlapping_Countries = n(), .groups = "drop") %>%
+        mutate(Variable1 = var1, Variable2 = var2)
+
+      results <- bind_rows(results, income_overlap)
+    }
+  }
+  
+  return(results)
+}
+
+# Define selected columns for income-based overlap analysis
+selected_columns <- c("elasticity_male", "america_cfst", "bonus_culture_prevalence", "tightness_score", "preferences_patience", "Responsibilism", "total_factor_productivity", "composite_universalism", "Individualism", "tight_loose")
+income_column <- "IncomeGroup"  
+
+# Compute the overlap table by income classification
+overlap_income_table <- count_overlapping_countries_by_income(combined_data, selected_columns, income_column)
+
+# Rename variables for better readability in the final overlap table
+overlap_table <- overlap_table %>%
+  mutate(Variable1 = case_when(
+    Variable1 == "elasticity_male" ~ "Elasticity", 
+    Variable1 == "america_cfst" ~ "Cultural Distance", 
+    Variable1 == "bonus_culture_prevalence" ~ "WMS", 
+    Variable1 == "tightness_score" ~ "Industrial Tightness", 
+    Variable1 == "preferences_patience" ~ "Economic Preferences",
+    Variable1 == "gdp_pc_2021" ~ "GDP per Capita",
+    TRUE ~ Variable1
+  )) %>%
+   mutate(Variable2 = case_when(
+    Variable2 == "elasticity_male" ~ "Elasticity", 
+    Variable2 == "america_cfst" ~ "Cultural Distance", 
+    Variable2 == "bonus_culture_prevalence" ~ "WMS", 
+    Variable2 == "tightness_score" ~ "Industrial Tightness", 
+    Variable2 == "preferences_patience" ~ "Economic Preferences",
+    Variable2 == "gdp_pc_2021" ~ "GDP per Capita",
+    TRUE ~ Variable2
+  ))
+
+
+# Rename variables for better readability in the income-based overlap table
+overlap_income_table <- overlap_income_table %>%
+  mutate(Variable1 = case_when(
+    Variable1 == "elasticity_male" ~ "Elasticity", 
+    Variable1 == "america_cfst" ~ "Cultural Distance", 
+    Variable1 == "bonus_culture_prevalence" ~ "WMS", 
+    Variable1 == "tightness_score" ~ "Industrial Tightness", 
+    Variable1 == "preferences_patience" ~ "Economic Preferences",
+    TRUE ~ Variable1
+  )) %>%
+   mutate(Variable2 = case_when(
+    Variable2 == "elasticity_male" ~ "Elasticity", 
+    Variable2 == "america_cfst" ~ "Cultural Distance", 
+    Variable2 == "bonus_culture_prevalence" ~ "WMS", 
+    Variable2 == "tightness_score" ~ "Industrial Tightness", 
+    Variable2 == "preferences_patience" ~ "Economic Preferences",
+    TRUE ~ Variable2
+  ))
+
+# Function to create a table listing countries overlapping for each variable pair
+find_overlapping_countries_table <- function(data, columns, country_column) {
+  columns <- columns[columns %in% colnames(data)]
+  
+
+    results_list <- list()
+
+
+      for (i in 1:(length(columns) - 1)) {
+    for (j in (i + 1):length(columns)) {
+      var1 <- columns[i]
+      var2 <- columns[j]
+      
+
+          pair_name <- paste(var1, "vs", var2, sep = " ")
+    
+      # Identify countries with non-missing values for both variables
+      overlapping_countries <- data %>%
+        filter(!is.na(.data[[var1]]) & !is.na(.data[[var2]])) %>%
+        select(all_of(country_column)) %>%
+        distinct() %>%
+        arrange(.data[[country_column]])  
+
+      results_list[[pair_name]] <- overlapping_countries[[country_column]]
+    }
+  }
+  
+  # Convert results into a dataframe
+  results_df <- as.data.frame(do.call(cbind, results_list))
+  
+  return(results_df)
+}
+
+# Define selected columns and country column for overlap analysis
+selected_columns <- c("elasticity_male", "america_cfst", "bonus_culture_prevalence", "tightness_score", "preferences_patience", "Responsibilism", "total_factor_productivity", "composite_universalism", "Individualism", "tight_loose")
+country_column <- "countryname"  
+
+
+# Generate a table listing overlapping countries for each variable pair and rename for readability
+overlap_countries_table <- find_overlapping_countries_table(combined_data, selected_columns, country_column) %>%
+  rename( "Elasticity vs Cultural Distance" = "elasticity_male vs america_cfst",             
+          "Elasticity vs WMS" = "elasticity_male vs bonus_culture_prevalence",
+          "Elasticity vs Industrial Tightness" = "elasticity_male vs tightness_score",           
+          "Elasticity vs Economic Preferences" = "elasticity_male vs preferences_patience",     
+          "Cultural Distance vs WMS" = "america_cfst vs bonus_culture_prevalence",         
+          "Cultural Distance vs Industrial Tightness" = "america_cfst vs tightness_score",            
+          "Cultural Distance vs Economic Preferences" = "america_cfst vs preferences_patience",       
+          "WMS vs Industrial Tightness" = "bonus_culture_prevalence vs tightness_score",     
+          "WMS vs Economic Preferences" = "bonus_culture_prevalence vs preferences_patience", 
+          "Elasticity vs Responsibilism" = "elasticity_male vs Responsibilism",
+          "Cultural Distance vs Responsibilism" = "america_cfst vs Responsibilism",
+          "WMS vs Responsibilism" = "bonus_culture_prevalence vs Responsibilism",
+          "Industrual Tightness vs Responsibilism" = "tightness_score vs Responsibilism",
+          "Economic Preferences vs Responsibilism" = "preferences_patience vs Responsibilism")
+
+
+
+```
+
+# Exporting outputs
+
+This code exports the consolidated dataset and overlap analysis tables to separate Excel files for further analysis and documentation.
+
+```{r}
+
+# Save the consolidated dataset and overlap tables to Excel
+library(writexl)
+write_xlsx(combined_data, path = "Data/Generated_Data/Master_Data.xlsx")
+
+# Create a list of data frames to store as separate sheets in an Excel file
+sheets_list <- list(
+  "Overlap Table" = overlap_table,
+  "Overlap Income Table" = overlap_income_table,
+  "Overlap Countries Table" = overlap_countries_table
+)
+
+# Write all overlap tables into an Excel file
+write_xlsx(sheets_list, path = "Tables/Pairwise_Tables.xlsx")
+```

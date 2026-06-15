@@ -1,0 +1,656 @@
+---
+title: "Regression Tables"
+output: html_notebook
+Author: "Ayesha Zafar" 
+---
+
+
+#Script Description 
+
+The purpose of this script is to create a regression table 
+
+
+# Packages Used
+
+```{r, message=FALSE}
+
+library(tidyverse)
+library(stargazer)
+library(ggpubr)
+library(readxl)
+library(tinytex)
+library(texreg)
+library(lmtest)
+library(sandwich)
+
+```
+
+# Load Dataset 
+
+The master data is consolidated using the 1.Master_Data.RMD script. Wms data is extracted from the World Management Survey public data. 
+
+```{r, message=FALSE}
+
+master_data <- read_excel("Data/Generated_Data/Master_Data.xlsx") %>%
+  mutate(LogGDP = log(gdp_pc_2021))
+
+#Loading Firm Level Data 
+
+wms_data <- read_csv("Data/Extracted_Data/wmsdata_2004_2015.csv") %>%
+  select(country, talent2, talent3, sic2, employment) %>%  # Select relevant columns %>%
+  rename("bonus_firm" = "talent2", 
+         "shirk_firm" = "talent3", 
+         "countryname" = "country") %>%
+  mutate(bonus_culture_prevalence_firm = ifelse(bonus_firm >= 4, 1,0),
+         shirk_tolerance_firm = ifelse(shirk_firm >= 4, 1,0))
+
+wms_data$employment <- factor(wms_data$employment,
+                                 levels = c("A) 50 to 100",
+                                            "B) 101 to 250",
+                                            "C) 251 to 500",
+                                            "D) 501 to 1000",
+                                            "E) 1000+"))
+
+wms_combined <- merge(wms_data, master_data, by = "countryname", all.x = TRUE) %>%
+  mutate(countryname = as.character(countryname))
+
+
+```
+
+
+# Calculating Medians & Mean
+
+This chunk of code is calculating Medians of all cultural variables, and then recoding the variables as Dummys, with 1 above median. This is to ensure consistency of interpretation. 
+
+Means are calculated to add in the final regression tables
+```{r}
+
+responsibilism_median <- master_data %>% 
+  filter(!is.na(Responsibilism)) %>%
+  pull(Responsibilism) %>%
+  median()
+  
+universalism_median <- master_data %>% 
+  filter(!is.na(domestic_universalism)) %>%
+  pull(domestic_universalism) %>%
+  median()
+  
+  
+individualism_median <- master_data %>% 
+  filter(!is.na(Individualism)) %>%
+  pull(Individualism) %>%
+  median()
+  
+tightloose_median <-master_data %>% 
+  filter(!is.na(tight_loose_cd)) %>%
+  pull(tight_loose_cd) %>%
+  median()
+
+master_data <- master_data %>%
+  mutate(dummy_responsibilism = ifelse(Responsibilism <= responsibilism_median, 1, 0), #coded below median to be closer to weird cultures for consistency 
+         dummy_universalism = ifelse(domestic_universalism >= universalism_median, 1, 0), 
+         dummy_individualism = ifelse(Individualism >= individualism_median, 1, 0), 
+         dummy_tightloose = ifelse(tight_loose_cd >= tightloose_median, 1, 0))
+
+wms_combined <- wms_combined %>%
+  mutate(dummy_responsibilism = ifelse(Responsibilism <= responsibilism_median, 1, 0), #coded below median to be closer to weird cultures for consistency 
+         dummy_universalism = ifelse(domestic_universalism >= universalism_median, 1, 0), 
+         dummy_individualism = ifelse(Individualism >= individualism_median, 1, 0), 
+         dummy_tightloose = ifelse(tight_loose_cd >= tightloose_median, 1, 0))
+
+mean_wms <- 
+  summarise(wms_combined, bonusmean = mean(bonus_culture_prevalence_firm, na.rm=TRUE),
+            shirkmean = mean(shirk_tolerance_firm, na.rm = TRUE))
+  
+means <- summarise(master_data, tfpmean = mean(total_factor_productivity, na.rm=TRUE), elasticitymean = mean(elasticity_male, na.rm=TRUE))
+
+
+
+```
+
+
+
+# Running the Single Variate Models
+
+This chunk is creating single variate models for 4 dependent variables, TFP, Bonus Culture, Shirk Tolerance and Wage Elasticity
+
+```{r}
+
+ models_TFP <- list(
+  lm(total_factor_productivity ~ dummy_responsibilism, 
+     data=master_data),
+  lm(total_factor_productivity ~ dummy_universalism, 
+     data=master_data),
+  lm(total_factor_productivity ~ dummy_individualism, 
+     data=master_data), 
+  lm(total_factor_productivity ~ dummy_tightloose, 
+     data=master_data))
+
+# LM with Fixed effects for employment and industry, with SE clustered at country level
+
+models_bonus_wms <- list(
+  lm(bonus_culture_prevalence_firm ~ dummy_responsibilism + LogGDP + employment + factor(sic2), 
+     data = wms_combined),
+  
+  lm(bonus_culture_prevalence_firm ~ dummy_universalism +  LogGDP + employment + factor(sic2), 
+     data = wms_combined),
+  
+  lm(bonus_culture_prevalence_firm ~ dummy_individualism +  LogGDP + employment + factor(sic2), 
+     data = wms_combined),
+  
+  lm(bonus_culture_prevalence_firm ~ dummy_tightloose +  LogGDP + employment + factor(sic2), 
+     data = wms_combined))
+
+
+# LM with Fixed effects for employment and industry, LogGDP as control with SE clustered at country level
+
+models_shirk_wms <- list(
+  lm(shirk_tolerance_firm ~ dummy_responsibilism +  LogGDP + employment + factor(sic2), 
+       data = wms_combined),
+  
+  lm(shirk_tolerance_firm ~ dummy_universalism + LogGDP +  employment + factor(sic2), 
+       data = wms_combined),
+  
+  lm(shirk_tolerance_firm ~ dummy_individualism +  LogGDP + employment + factor(sic2), 
+       data = wms_combined),
+  
+  lm(shirk_tolerance_firm ~ dummy_tightloose + LogGDP + employment + factor(sic2), 
+       data = wms_combined))
+
+
+models_Elasticity <- list(
+  lm(elasticity_male ~ dummy_responsibilism + LogGDP, 
+     data=master_data),
+  lm(elasticity_male ~ dummy_universalism + LogGDP, 
+     data=master_data),
+  lm(elasticity_male ~ dummy_individualism + LogGDP, 
+     data=master_data),
+  lm(elasticity_male ~ dummy_tightloose + LogGDP, 
+     data=master_data))
+
+```
+
+
+# Running the Multi-Variate Models 
+
+This chunk is running 4 multivariate models. 
+
+```{r}
+
+# Run a Multivariate Model for each outcome
+
+multi_TFP <- lm(total_factor_productivity ~ dummy_responsibilism + dummy_universalism + dummy_individualism + dummy_tightloose, 
+                data= master_data)
+
+models_TFP <- c(models_TFP, list(multi_TFP))
+
+
+multi_WMS_bonus <- lm(bonus_culture_prevalence_firm ~ dummy_responsibilism + dummy_universalism + dummy_individualism + dummy_tightloose + LogGDP + employment + factor(sic2)
+                      , data = wms_combined)
+ 
+multi_WMS_shirk <- lm(shirk_tolerance_firm ~ dummy_responsibilism + dummy_universalism + dummy_individualism + dummy_tightloose + LogGDP + employment + factor(sic2)
+                      , data = wms_combined)
+
+
+models_bonus_wms <- c(models_bonus_wms, list(multi_WMS_bonus))
+
+models_shirk_wms <- c(models_shirk_wms, list(multi_WMS_shirk))
+
+multi_Elasticity <- lm(elasticity_male ~ dummy_responsibilism + dummy_universalism + dummy_individualism + dummy_tightloose, 
+                       data=master_data)
+
+models_Elasticity <- c(models_Elasticity, list(multi_Elasticity))
+
+
+```
+
+
+# Spearman Test 
+
+This chunk is computing spearman correlations for all of the single variate models and saving them to include in the final regression table. 
+
+```{r}
+
+
+# Compute Spearman correlations for each model
+
+TFP_Resp = cor.test( y = master_data$total_factor_productivity, 
+                     x = master_data$dummy_responsibilism, 
+                     method = "spearman")
+
+TFP_Uni = cor.test( y = master_data$total_factor_productivity, 
+                    x = master_data$dummy_universalism, 
+                    method = "spearman")
+
+TFP_Ind = cor.test( y = master_data$total_factor_productivity, 
+                    x = master_data$dummy_individualism, 
+                    method = "spearman")
+
+TFP_TL = cor.test( y = master_data$total_factor_productivity, 
+                    x = master_data$dummy_tightloose, 
+                    method = "spearman")
+
+# Saving the Values to add to final regression table
+
+TFP_spearman_values <- list(
+  "Spearman Correlation (Responsibilism)" = round(TFP_Resp$estimate, 3),
+  "P-Value (Responsibilism)" = round(TFP_Resp$p.value, 3),
+  
+  "Spearman Correlation (Universalism)" = round(TFP_Uni$estimate, 3),
+  "P-Value (Universalism)" = round(TFP_Uni$p.value, 3), 
+  
+  "Spearman Correlation (Individualism)" = round(TFP_Ind$estimate, 3),
+  "P-Value (Individualism)" = round(TFP_Ind$p.value, 3),
+  
+  "Spearman Correlation (Tightness-Looseness)" = round(TFP_TL$estimate, 3),
+  "P-Value (Tightness-Looseness)" = round(TFP_TL$p.value, 3)
+)
+
+bonus_Resp = cor.test( y = master_data$bonus_culture_prevalence, 
+                     x = master_data$dummy_responsibilism, 
+                     method = "spearman")
+
+bonus_Uni = cor.test( y = master_data$bonus_culture_prevalence, 
+                    x = master_data$dummy_universalism, 
+                    method = "spearman")
+
+bonus_Ind = cor.test( y = master_data$bonus_culture_prevalence, 
+                    x = master_data$dummy_individualism, 
+                    method = "spearman")
+
+bonus_TL = cor.test( y = master_data$bonus_culture_prevalence, 
+                    x = master_data$dummy_tightloose, 
+                    method = "spearman")
+
+Bonus_spearman_values <- list(
+  "Spearman Correlation (Responsibilism)" = round(bonus_Resp$estimate, 3),
+  "P-Value (Responsibilism)" = round(bonus_Resp$p.value, 3),
+  
+  "Spearman Correlation (Universalism)" = round(bonus_Uni$estimate, 3),
+  "P-Value (Universalism)" = round(bonus_Uni$p.value, 3),
+  
+  "Spearman Correlation (Individualism)" = round(bonus_Ind$estimate, 3),
+  "P-Value (Individualism)" = round(bonus_Ind$p.value, 3),
+  
+  "Spearman Correlation (Tightness-Looseness)" = round(bonus_TL$estimate, 3),
+  "P-Value (Tightness-Looseness)" = round(bonus_TL$p.value, 3)
+)
+
+shirk_Resp = cor.test( y = master_data$shirk_tolerance, 
+                     x = master_data$dummy_responsibilism, 
+                     method = "spearman")
+
+shirk_Uni = cor.test( y = master_data$shirk_tolerance, 
+                    x = master_data$dummy_universalism, 
+                    method = "spearman")
+
+shirk_Ind = cor.test( y = master_data$shirk_tolerance, 
+                    x = master_data$dummy_individualism, 
+                    method = "spearman")
+
+shirk_TL = cor.test( y = master_data$shirk_tolerance, 
+                    x = master_data$dummy_tightloose, 
+                    method = "spearman")
+
+Shirk_spearman_values <- list(
+  "Spearman Correlation (Responsibilism)" = round(shirk_Resp$estimate, 3),
+  "P-Value (Responsibilism)" = round(shirk_Resp$p.value, 3),
+  
+  "Spearman Correlation (Universalism)" = round(shirk_Uni$estimate, 3),
+  "P-Value (Universalism)" = round(shirk_Uni$p.value, 3),
+  
+  "Spearman Correlation (Individualism)" = round(shirk_Ind$estimate, 3),
+  "P-Value (Individualism)" = round(shirk_Ind$p.value, 3),
+  
+  "Spearman Correlation (Tightness-Looseness)" = round(shirk_TL$estimate, 3),
+  "P-Value (Tightness-Looseness)" = round(shirk_TL$p.value, 3)
+)
+
+
+Elasticity_Resp = cor.test( y = master_data$elasticity_male, 
+                            x = master_data$dummy_responsibilism,
+                            method = "spearman")
+
+Elasticity_Uni = cor.test( y = master_data$elasticity_male, 
+                       x = master_data$dummy_universalism, 
+                       method = "spearman")
+
+Elasticity_Ind = cor.test( y = master_data$elasticity_male, 
+                    x = master_data$dummy_individualism, 
+                    method = "spearman")
+
+Elasticity_TL = cor.test( y = master_data$elasticity_male, 
+                    x = master_data$dummy_tightloose, 
+                    method = "spearman")
+
+Elasticity_spearman_values <- list(
+  "Spearman Correlation (Responsibilism)" = round(Elasticity_Resp$estimate, 3),
+  "P-Value (Responsibilism)" = round(Elasticity_Resp$p.value, 3),
+  
+  "Spearman Correlation (Universalism)" = round(Elasticity_Uni$estimate, 3),
+  "P-Value (Universalism)" = round(Elasticity_Uni$p.value, 3), 
+  
+  "Spearman Correlation (Individualism)" = round(Elasticity_Ind$estimate, 3),
+  "P-Value (Individualism)" = round(Elasticity_Ind$p.value, 3), 
+  
+  "Spearman Correlation (Tightness-Looseness)" = round(Elasticity_TL$estimate, 3),
+  "P-Value (Tightness-Looseness)" = round(Elasticity_TL$p.value, 3)
+)
+
+```
+
+# Calculating Base Rate
+
+```{r}
+
+get_base_rate <- function(df, dep_var, dummy_var) {
+  df %>%
+    filter(!is.na(.data[[dep_var]]), !is.na(.data[[dummy_var]])) %>%
+    summarise(mean_value = mean(.data[[dep_var]], na.rm = TRUE)) %>%
+    pull(mean_value)
+}
+
+get_base_rate_combined <- function(df, dep_var, dummy_vars) {
+  df %>%
+    filter(
+      !is.na(.data[[dep_var]]),
+      across(all_of(dummy_vars), ~ !is.na(.x)) %>% rowSums() == length(dummy_vars)
+    ) %>%
+    summarise(mean_value = mean(.data[[dep_var]], na.rm = TRUE)) %>%
+    pull(mean_value)
+}
+
+
+base_rates_bonus <- list(
+base_rate_bonus_responsibilism = get_base_rate(wms_combined, "bonus_culture_prevalence_firm", "dummy_responsibilism"),
+base_rate_bonus_universalism   = get_base_rate(wms_combined, "bonus_culture_prevalence_firm", "dummy_universalism"),
+base_rate_bonus_individualism  = get_base_rate(wms_combined, "bonus_culture_prevalence_firm", "dummy_individualism"),
+base_rate_bonus_tightloose     = get_base_rate(wms_combined, "bonus_culture_prevalence_firm", "dummy_tightloose"),
+base_rate_bonus_combined = get_base_rate_combined(
+  df = wms_combined,
+  dep_var = "bonus_culture_prevalence_firm",
+  dummy_vars = c("dummy_responsibilism", "dummy_universalism", "dummy_individualism", "dummy_tightloose")
+))
+
+
+base_rates_shirk <- list(
+  base_rate_shirk_responsibilism = get_base_rate(wms_combined, "shirk_tolerance_firm", "dummy_responsibilism"),
+  base_rate_shirk_universalism   = get_base_rate(wms_combined, "shirk_tolerance_firm", "dummy_universalism"),
+  base_rate_shirk_individualism  = get_base_rate(wms_combined, "shirk_tolerance_firm", "dummy_individualism"),
+  base_rate_shirk_tightloose     = get_base_rate(wms_combined, "shirk_tolerance_firm", "dummy_tightloose"),
+  base_rate_shirk_combined = get_base_rate_combined(
+  df = wms_combined,
+  dep_var = "shirk_tolerance_firm",
+  dummy_vars = c("dummy_responsibilism", "dummy_universalism", "dummy_individualism", "dummy_tightloose")
+))
+
+
+base_rates_tfp <- list(
+  base_rate_tfp_responsibilism = get_base_rate(master_data, "total_factor_productivity", "dummy_responsibilism"),
+  base_rate_tfp_universalism   = get_base_rate(master_data, "total_factor_productivity", "dummy_universalism"),
+  base_rate_tfp_individualism  = get_base_rate(master_data, "total_factor_productivity", "dummy_individualism"),
+  base_rate_tfp_tightloose     = get_base_rate(master_data, "total_factor_productivity", "dummy_tightloose"),
+  base_rate_tfp_combined = get_base_rate_combined(
+  df = wms_combined,
+  dep_var = "total_factor_productivity",
+  dummy_vars = c("dummy_responsibilism", "dummy_universalism", "dummy_individualism", "dummy_tightloose")
+))
+
+base_rates_elasticity <- list(
+  base_rate_elasticity_responsibilism = get_base_rate(master_data, "elasticity_male", "dummy_responsibilism"),
+  base_rate_elasticity_universalism   = get_base_rate(master_data, "elasticity_male", "dummy_universalism"),
+  base_rate_elasticity_individualism  = get_base_rate(master_data, "elasticity_male", "dummy_individualism"),
+  base_rate_elasticity_tightloose     = get_base_rate(master_data, "elasticity_male", "dummy_tightloose"),
+  base_rate_elasticity_combined = get_base_rate_combined(
+  df = wms_combined,
+  dep_var = "elasticity_male",
+  dummy_vars = c("dummy_responsibilism", "dummy_universalism", "dummy_individualism", "dummy_tightloose")
+))
+
+```
+
+
+# Creating the Regression Table
+
+This chunk is creating the regression table and saving each table to a tex file. 
+
+```{r, warning=FALSE}
+
+# TFP Models Summary
+
+stargazer(models_TFP, 
+          type = "latex",
+          title = "TFP Regression Results",
+          float = FALSE,
+          dep.var.labels = "TFP",
+          covariate.labels = c("Relatively Low Responsibilism", 
+                               "Relatively High Universalism ", 
+                               "Relatively Individualistic", 
+                               "Relatively Loose"),
+          omit = c("Constant"),
+          add.lines = list(
+            c("Base Rate (TFP)", 
+              round(base_rates_tfp$base_rate_tfp_responsibilism, 3),
+              round(base_rates_tfp$base_rate_tfp_universalism, 3),
+              round(base_rates_tfp$base_rate_tfp_individualism, 3),
+              round(base_rates_tfp$base_rate_tfp_tightloose, 3),
+              round(base_rates_tfp$base_rate_tfp_combined, 3)),
+            c("Spearman Correlation", 
+              TFP_spearman_values[["Spearman Correlation (Responsibilism)"]],
+              TFP_spearman_values[["Spearman Correlation (Universalism)"]],
+              TFP_spearman_values[["Spearman Correlation (Individualism)"]],
+              TFP_spearman_values[["Spearman Correlation (Tightness-Looseness)"]],
+              "NA"),
+            c("P-Value", 
+              TFP_spearman_values[["P-Value (Responsibilism)"]],
+              TFP_spearman_values[["P-Value (Universalism)"]],
+              TFP_spearman_values[["P-Value (Individualism)"]],
+              TFP_spearman_values[["P-Value (Tightness-Looseness)"]],
+              "N/A")
+          ),
+          out = "Tables/Regressions/tfp_models_combined.tex")
+
+
+# Elasticity Models Summary
+
+stargazer(models_Elasticity, 
+          type = "latex",
+          title = "Elasticity Regression Results",
+          float = FALSE,
+          dep.var.labels = "Male Hour-Wage Elasticty",
+          covariate.labels = c("Relatively Low Responsibilism", 
+                               "Relatively High Universalism ", 
+                               "Relatively Individualistic", 
+                               "Relatively Loose"),
+          omit = c("Constant"),
+          add.lines = list(
+            c("Base Rate (Male Wage Elasticity)", 
+              round(base_rates_elasticity$base_rate_elasticity_responsibilism, 3),
+              round(base_rates_elasticity$base_rate_elasticity_universalism, 3),
+              round(base_rates_elasticity$base_rate_elasticity_individualism, 3),
+              round(base_rates_elasticity$base_rate_elasticity_tightloose, 3),
+              round(base_rates_elasticity$base_rate_elasticity_combined, 3)),
+            c("Spearman Correlation", 
+              Elasticity_spearman_values[["Spearman Correlation (Responsibilism)"]],
+              Elasticity_spearman_values[["Spearman Correlation (Universalism)"]],
+              Elasticity_spearman_values[["Spearman Correlation (Individualism)"]],
+              Elasticity_spearman_values[["Spearman Correlation (Tightness-Looseness)"]],
+              "N/A"),
+            c("P-Value", 
+              Elasticity_spearman_values[["P-Value (Responsibilism)"]],
+              Elasticity_spearman_values[["P-Value (Universalism)"]],
+              Elasticity_spearman_values[["P-Value (Individualism)"]],
+              Elasticity_spearman_values[["P-Value (Tightness-Looseness)"]])
+          ),
+          out = "Tables/Regressions/elasticity_models_combined.tex")
+
+```
+
+
+
+```{r, warning=FALSE}
+
+# Saving Country Observations
+
+wms_country_observations <- list(
+  Responsibilism = wms_combined %>%
+    filter(!is.na(bonus_culture_prevalence_firm) & !is.na(dummy_responsibilism)) %>%
+    distinct(countryname) %>%
+    nrow(),
+  
+  Universalism = wms_combined %>%
+    filter(!is.na(bonus_culture_prevalence_firm) & !is.na(dummy_universalism)) %>%
+    distinct(countryname) %>%
+    nrow(),
+  
+  Individualism = wms_combined %>%
+    filter(!is.na(bonus_culture_prevalence_firm) & !is.na(dummy_individualism)) %>%
+    distinct(countryname) %>%
+    nrow(),
+  
+  Tightness = wms_combined %>%
+    filter(!is.na(bonus_culture_prevalence_firm) & !is.na(dummy_tightloose)) %>%
+    distinct(countryname) %>%
+    nrow(),
+  
+  Combined = wms_combined %>%
+    filter(!is.na(bonus_culture_prevalence_firm),
+           !is.na(dummy_responsibilism),
+           !is.na(dummy_universalism),
+           !is.na(dummy_individualism),
+           !is.na(dummy_tightloose)) %>%
+    distinct(countryname) %>%
+    nrow()
+)
+
+wms_firm_obs <- sapply(models_bonus_wms, nobs)
+
+# Clustered SE at country level For bonus prevalence models
+clustered_se_bonus <- lapply(c(models_bonus_wms, list(multi_WMS_bonus)), function(model) {
+  coeftest(model, vcov = vcovCL(model, cluster = ~countryname, data = wms_combined))
+})
+
+coef_list_bonus <- lapply(clustered_se_bonus, function(x) x[, "Estimate"])
+se_list_bonus <- lapply(clustered_se_bonus, function(x) x[, "Std. Error"])
+pval_list_bonus <- lapply(clustered_se_bonus, function(x) x[, "Pr(>|t|)"])
+
+# Clustered SE at country level For shirk tolerance models
+clustered_se_shirk <- lapply(c(models_shirk_wms, list(multi_WMS_shirk)), function(model) {
+  coeftest(model, vcov = vcovCL(model, cluster = ~countryname, data = wms_combined))
+})
+
+coef_list_shirk <- lapply(clustered_se_shirk, function(x) x[, "Estimate"])
+se_list_shirk <- lapply(clustered_se_shirk, function(x) x[, "Std. Error"])
+pval_list_shirk <- lapply(clustered_se_shirk, function(x) x[, "Pr(>|t|)"])
+
+# Bonus Culture Prevalence Models Summary
+stargazer(
+  models_bonus_wms, 
+  type = "latex",
+  title = "Bonus Culture Prevalence (WMS) Regression Results",
+  float = FALSE,
+  dep.var.labels = "Bonus Culture Prevalence",
+  covariate.labels = c("Relatively Low Responsibilism", 
+                               "Relatively High Universalism ", 
+                               "Relatively Individualistic", 
+                               "Relatively Loose"),
+  keep.stat = c("adj.rsq", "ser"),
+  se = se_list_bonus,
+  p = pval_list_bonus,
+  omit = c("employment[A-Z]\\)", "factor\\(sic2\\)\\d+","Constant"),  # Regex to match all employment and sic2 dummies
+  add.lines = list(
+    c("Base Rate (Bonus Culture Prevalence)", 
+      round(base_rates_bonus$base_rate_bonus_responsibilism, 3),
+      round(base_rates_bonus$base_rate_bonus_universalism, 3),
+      round(base_rates_bonus$base_rate_bonus_individualism, 3),
+      round(base_rates_bonus$base_rate_bonus_tightloose, 3),
+      round(base_rates_bonus$base_rate_bonus_combined, 3)),
+    c("Fixed Effects (Firm Size)", "Yes", "Yes", "Yes", "Yes", "Yes"),
+    c("Fixed Effects (Industry)", "Yes", "Yes", "Yes", "Yes", "Yes"),
+    c("Clustered SEs", "Country Level", "Country Level", "Country Level", "Country Level", "Country Level"),
+    c("Country-level Observations",
+      wms_country_observations$Responsibilism,
+      wms_country_observations$Universalism,
+      wms_country_observations$Individualism,
+      wms_country_observations$Tightness,
+      wms_country_observations$Combined),
+    c("Firm-level Observations",
+      wms_firm_obs[1],
+      wms_firm_obs[2],
+      wms_firm_obs[3],
+      wms_firm_obs[4],
+      wms_firm_obs[5]),
+    c("Spearman Correlation", 
+      Bonus_spearman_values[["Spearman Correlation (Responsibilism)"]],
+      Bonus_spearman_values[["Spearman Correlation (Universalism)"]],
+      Bonus_spearman_values[["Spearman Correlation (Individualism)"]],
+      Bonus_spearman_values[["Spearman Correlation (Tightness-Looseness)"]],
+      "NA"),
+    c("P-Value", 
+      Bonus_spearman_values[["P-Value (Responsibilism)"]],
+      Bonus_spearman_values[["P-Value (Universalism)"]],
+      Bonus_spearman_values[["P-Value (Individualism)"]],
+      Bonus_spearman_values[["P-Value (Tightness-Looseness)"]],
+      "N/A")
+  ),
+  notes = NULL,
+  out = "Tables/Regressions/bonus_wms_models_combined.tex"
+)
+  
+
+# Shirk Tolerance Models Summary
+
+stargazer(models_shirk_wms, 
+          type = "latex",
+          title = "Shirk Intolerance (WMS) Regression Results",
+          float = FALSE,
+          dep.var.labels = "Shirk Intolerance",
+          covariate.labels = c("Relatively Low Responsibilism", 
+                               "Relatively High Universalism ", 
+                               "Relatively Individualistic", 
+                               "Relatively Loose"),
+          keep.stat = c("adj.rsq", "ser"),  # Keeps other stats but removes default obs
+          omit = c("employment[A-Z]\\)", "factor\\(sic2\\)\\d+", "Constant"),  # Regex to match all employment and sic2 dummies
+          se = se_list_shirk,
+          p = pval_list_shirk,
+          add.lines = list(
+            c("Base Rate (Shirk Tolerance)", 
+              round(base_rates_shirk$base_rate_shirk_responsibilism, 3),
+              round(base_rates_shirk$base_rate_shirk_universalism, 3),
+              round(base_rates_shirk$base_rate_shirk_individualism, 3),
+              round(base_rates_shirk$base_rate_shirk_tightloose, 3),
+              round(base_rates_shirk$base_rate_shirk_combined, 3)),
+            c("Fixed Effects (Firm Size)", "Yes", "Yes", "Yes", "Yes", "Yes"),
+            c("Fixed Effects (Industry)", "Yes", "Yes", "Yes", "Yes", "Yes"),
+            c("Clustered SEs", "Country Level", "Country Level", "Country Level", "Country Level", "Country Level"),
+            c("Country-level Observations",
+              wms_country_observations$Responsibilism,
+              wms_country_observations$Universalism,
+              wms_country_observations$Individualism,
+              wms_country_observations$Tightness,
+              wms_country_observations$Combined),
+            c("Firm-level Observations",
+              wms_firm_obs[1],
+              wms_firm_obs[2],
+              wms_firm_obs[3],
+              wms_firm_obs[4],
+              wms_firm_obs[5]),
+            c("Spearman Correlation", 
+              Shirk_spearman_values[["Spearman Correlation (Responsibilism)"]],
+              Shirk_spearman_values[["Spearman Correlation (Universalism)"]],
+              Shirk_spearman_values[["Spearman Correlation (Individualism)"]],
+              Shirk_spearman_values[["Spearman Correlation (Tightness-Looseness)"]], 
+              "NA"),
+            c("P-Value", 
+              Shirk_spearman_values[["P-Value (Responsibilism)"]],
+              Shirk_spearman_values[["P-Value (Universalism)"]],
+              Shirk_spearman_values[["P-Value (Individualism)"]],
+              Shirk_spearman_values[["P-Value (Tightness-Looseness)"]],
+              "N/A")
+          ),
+          out = "Tables/Regressions/shirk_wms_models_combined.tex")
+
+```
+
+
+

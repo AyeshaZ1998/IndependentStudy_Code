@@ -1,0 +1,1534 @@
+---
+title: "2.Correlation_Graphs"
+output: html_notebook
+---
+
+
+#Script Description
+
+The purpose of this script is to create graphs to examine the correlation between various cultural variables using cross-country data. The generated plots are compiled into a PDF. 
+
+#Packages Used 
+```{r}
+
+library(tidyverse)
+library(readxl)
+library(ggrepel)
+library(ggplot2)
+```
+
+#Loading the data
+
+The data set used in this script is consolidated using the "Data_consolidation.Rmd"
+
+```{r}
+
+consolidated_data <- read_excel("Data/Generated_Data/Master_Data.xlsx")
+
+consolidated_data <- consolidated_data %>%
+  mutate(america_cfst = as.numeric(america_cfst), 
+         china_csft = as.numeric(china_csft))
+
+```
+
+
+# Cultural Distance vs Hour-Wage Elasticity 
+
+The following code chunk generates scatterplots with regression lines by plotting Hour-wage elasticity against cultural distance. 
+
+```{r}
+# Building the graph for cultural distance from the US
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+male_lm <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(america_cfst)) %>%
+  lm(elasticity_male ~ america_cfst, 
+     data = .)
+
+male_slope_US   <- round(coef(male_lm)[2], 3)
+
+female_lm <- consolidated_data %>%
+  filter(!is.na(elasticity_female) & !is.na(america_cfst)) %>%
+  lm(elasticity_female ~ america_cfst, 
+     data = .)
+
+female_slope_US <- round(coef(female_lm)[2], 3)
+
+n_countries_US <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(america_cfst)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+p1 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(america_cfst)) %>%
+  ggplot(aes(x = america_cfst)) + 
+  #male elasticity line
+  geom_point(aes(y = elasticity_male, 
+                 color = "Male")) + 
+  geom_smooth(aes(y = elasticity_male, 
+                  color = "Male"), 
+              method = "lm") +
+  geom_text_repel(aes(x = america_cfst, 
+                      y = elasticity_male,
+                      color = "Male",
+                      label = ISO_code), 
+                  max.overlaps = 20) + 
+  #female elasticity line 
+  geom_point(aes(y = elasticity_female,
+                 color = "Female")) + 
+  geom_smooth(aes(y = elasticity_female, 
+                  color = "Female"), 
+              method = "lm") + 
+  geom_text_repel(aes(x = america_cfst, 
+                      y = elasticity_female,
+                      color = "Female",
+                      label = ISO_code), 
+                  max.overlaps = 20) +
+  theme_minimal() + 
+  theme() + 
+  labs(title = "S", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y =  "Hours–Wage Elasticity") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Male slope: ", male_slope_US,
+      "\nFemale slope: ", female_slope_US,
+      "\nN countries: ", n_countries_US))
+
+
+```
+
+The following code chunk generates scatterplots with regression lines to investigate how labor market elasticity for men and women correlates with cultural distance from China (CFST). The hours–wage elasticity values come from Bicks et al. (2017). We include country labels (ISO codes) for clarity and use a minimal theme. 
+
+
+```{r}
+
+# Building the graph for cultural distance from the China
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+male_lm_china <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(china_csft)) %>%
+  lm(elasticity_male ~ china_csft, 
+     data = .)
+
+male_slope_china   <- round(coef(male_lm_china)[2], 3)
+
+female_lm_china <- consolidated_data %>%
+  filter(!is.na(elasticity_female) & !is.na(china_csft)) %>%
+  lm(elasticity_female ~ china_csft, 
+     data = .)
+
+female_slope_china <- round(coef(female_lm_china)[2], 3)
+
+n_countries_china <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(china_csft)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+
+p2 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(china_csft)) %>%
+  ggplot(aes(x = china_csft)) + 
+  #male elasticity line
+  geom_point(aes(y = elasticity_male, 
+                 color = "Male")) + 
+  geom_smooth(aes(y = elasticity_male, 
+                  color = "Male"), 
+              method = "lm") +
+  geom_text_repel(aes(x = china_csft, 
+                      y = elasticity_male,
+                      color = "Male",
+                      label = ISO_code), 
+                  max.overlaps = 20) + 
+  #female elasticity line 
+  geom_point(aes(y = elasticity_female,
+                 color = "Female")) + 
+  geom_smooth(aes(y = elasticity_female, 
+                  color = "Female"), 
+              method = "lm") + 
+  geom_text_repel(aes(x = china_csft, 
+                      y = elasticity_female,
+                      color = "Female",
+                      label = ISO_code), 
+                  max.overlaps = 20) +
+  theme_minimal() + 
+  theme() + 
+  labs(title = "S", 
+       x = "Cultural Distance From the China. (CFst:0-1)", 
+       y =  "Hours–Wage Elasticity") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Male slope: ", male_slope_china,
+      "\nFemale slope: ", female_slope_china,
+      "\nN countries: ", n_countries_china))
+
+
+```
+
+
+# Norm Tightness vs WMS 
+
+The following code chunk generates scatterplots with regression lines by plotting Tightness-Looseness values against WMS (“Bonus Culture Prevalence” and “Talent Management”) scores.
+
+```{r}
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+tl_wms_lm_1 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(tightness_score)) %>%
+  lm(bonus_culture_prevalence ~ tightness_score, 
+     data = .)
+
+tl_wms_slope_1   <- round(coef(tl_wms_lm_1)[2], 3)
+
+n_countries_1 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(tightness_score)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+
+p3 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(bonus_culture_prevalence)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = bonus_culture_prevalence)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Tightness-Looseness (Index)", 
+       y = "WMS Bonus Culture Prevalence (Index: 1-5)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", tl_wms_slope_1,
+      "\nN countries: ", n_countries_1)) 
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+
+tl_wms_lm_2 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(shirk_tolerance)) %>%
+  lm(shirk_tolerance ~ tightness_score, 
+     data = .)
+
+tl_wms_slope_2   <- round(coef(tl_wms_lm_2)[2], 3)
+
+n_countries_2 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(shirk_tolerance)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+
+p4 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(shirk_tolerance)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = shirk_tolerance)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Tightness-Looseness (Index)", 
+       y = "WMS Shirk Tolerance (Index: 1-5)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", tl_wms_slope_2 ,
+      "\nN countries: ", n_countries_2)) 
+
+```
+
+# Cultural Distance vs WMS 
+
+The following code chunk generates scatterplots with regression lines by plotting cultural distance against WMS scores (“Bonus Culture Prevalence” and “Shirk Tolerance”). 
+
+```{r}
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+
+wms_cd_1 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(bonus_culture_prevalence)) %>%
+  lm(bonus_culture_prevalence ~ america_cfst, 
+     data = .)
+
+wms_cd_slope_1   <- round(coef(wms_cd_1)[2], 3)
+
+n_countries_3 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(bonus_culture_prevalence)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p5 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(bonus_culture_prevalence)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = bonus_culture_prevalence)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "WMS Bonus Culture Prevalence (Index: 1-5)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", wms_cd_slope_1 ,
+      "\nN countries: ", n_countries_3)) 
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+wms_cd_2 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(shirk_tolerance)) %>%
+  lm(shirk_tolerance ~ america_cfst, 
+     data = .)
+
+wms_cd_slope_2   <- round(coef(wms_cd_2)[2], 3)
+
+n_countries_4 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(shirk_tolerance)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p6 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(shirk_tolerance)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = shirk_tolerance)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "WMS Shirk Tolerance (Index: 1-5)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", wms_cd_slope_2 ,
+      "\nN countries: ", n_countries_4)) 
+
+
+```
+
+# Economic Preferences vs Cultural Distance
+
+The following code chunk generates scatterplots with regression lines by plotting economic preferences (patience, risk-taking, reciprocity, altruism, and trust) against cultural distance. 
+
+
+```{r}
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_cd_1 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_patience)) %>%
+  lm(preferences_patience ~ america_cfst, 
+     data = .)
+
+ep_cd_slope_1   <- round(coef(ep_cd_1)[2], 3)
+
+n_countries_5 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_patience)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p7 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(preferences_patience)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = preferences_patience)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "Preferences - Patience (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_cd_slope_1 ,
+      "\nN countries: ", n_countries_5))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_cd_2 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_risktaking)) %>%
+  lm(preferences_risktaking ~ america_cfst, 
+     data = .)
+
+ep_cd_slope_2   <- round(coef(ep_cd_2)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p8 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(preferences_risktaking)) %>%
+  ggplot(aes(x = america_cfst, 
+             y =preferences_risktaking)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "Preferences - Risk Taking (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_cd_slope_2 ,
+      "\nN countries: ", n_countries_5))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_cd_3 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_posrecip)) %>%
+  lm(preferences_posrecip ~ america_cfst, 
+     data = .)
+
+ep_cd_slope_3   <- round(coef(ep_cd_3)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p9 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(preferences_posrecip)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = preferences_posrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "ss", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "Preferences - Positive Reciprocity (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_cd_slope_3 ,
+      "\nN countries: ", n_countries_5))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_cd_4 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_negrecip)) %>%
+  lm(preferences_negrecip ~ america_cfst, 
+     data = .)
+
+ep_cd_slope_4   <- round(coef(ep_cd_4)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p10 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(preferences_negrecip)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = preferences_negrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "Preferences - Negative Reciprocity (Standardized Score)")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_cd_slope_4 ,
+      "\nN countries: ", n_countries_5))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_cd_5 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_altruism)) %>%
+  lm(preferences_altruism ~ america_cfst, 
+     data = .)
+
+ep_cd_slope_5   <- round(coef(ep_cd_5)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+
+p11 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(preferences_altruism)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = preferences_altruism)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "Preferences - Altruism (Standardized Score)")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_cd_slope_5 ,
+      "\nN countries: ", n_countries_5))
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_cd_6 <- consolidated_data %>%
+  filter(!is.na(america_cfst) & !is.na(preferences_trust)) %>%
+  lm(preferences_trust ~ america_cfst, 
+     data = .)
+
+ep_cd_slope_6   <- round(coef(ep_cd_6)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p12 <- consolidated_data %>% 
+  filter(!is.na(america_cfst) & !is.na(preferences_trust)) %>%
+  ggplot(aes(x = america_cfst, 
+             y = preferences_trust)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Cultural Distance From the U.S. (CFst:0-1)", 
+       y = "Preferences - Trust (Standardized Score)")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_cd_slope_6 ,
+      "\nN countries: ", n_countries_5))
+
+
+
+
+
+```
+
+# Economic Preferences vs WMS
+
+The following code chunk generates scatterplots with regression lines by plotting economic preferences (patience, risk-taking, reciprocity, altruism, and trust) against WMS scores (“Bonus Culture Prevalence” and “Shirk Tolerance”). 
+
+```{r}
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_1 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_patience)) %>%
+  lm(preferences_patience ~ bonus_culture_prevalence, 
+     data = .)
+
+ep_wms_slope_1   <- round(coef(ep_wms_1)[2], 3)
+
+n_countries_6 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_patience)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p13 <- consolidated_data %>% 
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_patience)) %>%
+  ggplot(aes(x = bonus_culture_prevalence, 
+             y = preferences_patience)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Bonus Culture Prevalence (Index: 1-5)", 
+       y = "Preferences - Patience (Standardized Score)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_1 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_2 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_risktaking)) %>%
+  lm(preferences_risktaking ~ bonus_culture_prevalence, 
+     data = .)
+
+ep_wms_slope_2   <- round(coef(ep_wms_2)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p14 <- consolidated_data %>% 
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_risktaking)) %>%
+  ggplot(aes(x = bonus_culture_prevalence, 
+             y = preferences_risktaking)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Bonus Culture Prevalence (Index: 1-5)", 
+       y = "Preferences - Risk Taking (Standardized Score)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_2 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_3 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_posrecip)) %>%
+  lm(preferences_posrecip ~ bonus_culture_prevalence, 
+     data = .)
+
+ep_wms_slope_3   <- round(coef(ep_wms_3)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p15 <- consolidated_data %>% 
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_posrecip)) %>%
+  ggplot(aes(x = bonus_culture_prevalence, 
+             y = preferences_posrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Bonus Culture Prevalence (Index: 1-5)", 
+       y = "Preferences - Positive Reciprocity (Standardized Score)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_3 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_4 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_negrecip)) %>%
+  lm(preferences_negrecip ~ bonus_culture_prevalence, 
+     data = .)
+
+ep_wms_slope_4   <- round(coef(ep_wms_4)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p16 <- consolidated_data %>% 
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_negrecip)) %>%
+  ggplot(aes(x = bonus_culture_prevalence, 
+             y = preferences_negrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Bonus Culture Prevalence (Index: 1-5)", 
+       y = "Preferences - Negative Reciprocity (Standardized Score)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_4 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_5 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_altruism)) %>%
+  lm(preferences_altruism ~ bonus_culture_prevalence, 
+     data = .)
+
+ep_wms_slope_5   <- round(coef(ep_wms_5)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p17 <- consolidated_data %>% 
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_altruism)) %>%
+  ggplot(aes(x = bonus_culture_prevalence, 
+             y = preferences_altruism)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Bonus Culture Prevalence (Index: 1-5)", 
+       y = "Preferences - Altruism (Standardized Score)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_5 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_6 <- consolidated_data %>%
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_trust)) %>%
+  lm(preferences_trust ~ bonus_culture_prevalence, 
+     data = .)
+
+ep_wms_slope_6   <- round(coef(ep_wms_6)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+
+p18 <- consolidated_data %>% 
+  filter(!is.na(bonus_culture_prevalence) & !is.na(preferences_trust)) %>%
+  ggplot(aes(x = bonus_culture_prevalence, 
+             y = preferences_trust)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Bonus Culture Prevalence (Index: 1-5)", 
+       y = "Preferences - Trust (Standardized Score)",
+       caption = "A higher WMS score indicates a stronger performance-driven culture, with rigorous monitoring and evaluation systems.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_6 ,
+      "\nN countries: ", n_countries_6)) 
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_7 <- consolidated_data %>%
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_patience)) %>%
+  lm(preferences_patience ~ shirk_tolerance, 
+     data = .)
+
+ep_wms_slope_7   <- round(coef(ep_wms_7)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p19 <- consolidated_data %>% 
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_patience)) %>%
+  ggplot(aes(x = shirk_tolerance, 
+             y = preferences_patience)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Shirk Tolerance (Index: 1-5)", 
+       y = "Preferences - Patience (Standardized Score)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_7 ,
+      "\nN countries: ", n_countries_6)) 
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_8 <- consolidated_data %>%
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_risktaking)) %>%
+  lm(preferences_risktaking ~ shirk_tolerance, 
+     data = .)
+
+ep_wms_slope_8   <- round(coef(ep_wms_8)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p20 <- consolidated_data %>% 
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_risktaking)) %>%
+  ggplot(aes(x = shirk_tolerance, 
+             y = preferences_risktaking)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Shirk Tolerance (Index: 1-5)", 
+       y = "Preferences - Risk Taking (Standardized Score)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_8 ,
+      "\nN countries: ", n_countries_6)) 
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_9 <- consolidated_data %>%
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_posrecip)) %>%
+  lm(preferences_posrecip ~ shirk_tolerance, 
+     data = .)
+
+ep_wms_slope_9   <- round(coef(ep_wms_9)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+
+p21 <- consolidated_data %>% 
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_posrecip)) %>%
+  ggplot(aes(x = shirk_tolerance, 
+             y = preferences_posrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Shirk Tolerance (Index: 1-5)", 
+       y = "Preferences - Positive Reciprocity (Standardized Score)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_9 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_10 <- consolidated_data %>%
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_negrecip)) %>%
+  lm(preferences_negrecip ~ shirk_tolerance, 
+     data = .)
+
+ep_wms_slope_10   <- round(coef(ep_wms_10)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p22 <- consolidated_data %>% 
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_negrecip)) %>%
+  ggplot(aes(x = shirk_tolerance, 
+             y = preferences_negrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Shirk Tolerance (Index: 1-5)", 
+       y = "Preferences - Negative Reciprocity (Standardized Score)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_10 ,
+      "\nN countries: ", n_countries_6)) 
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_11 <- consolidated_data %>%
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_altruism)) %>%
+  lm(preferences_altruism ~ shirk_tolerance, 
+     data = .)
+
+ep_wms_slope_11   <- round(coef(ep_wms_11)[2], 3)
+
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p23 <- consolidated_data %>% 
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_altruism)) %>%
+  ggplot(aes(x = shirk_tolerance, 
+             y = preferences_altruism)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Shirk Tolerance (Index: 1-5)", 
+       y = "Preferences - Altruism (Standardized Score)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_11 ,
+      "\nN countries: ", n_countries_6)) 
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_wms_12 <- consolidated_data %>%
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_trust)) %>%
+  lm(preferences_trust ~ shirk_tolerance, 
+     data = .)
+
+ep_wms_slope_12   <- round(coef(ep_wms_12)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p24 <- consolidated_data %>% 
+  filter(!is.na(shirk_tolerance) & !is.na(preferences_trust)) %>%
+  ggplot(aes(x = shirk_tolerance, 
+             y = preferences_trust)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 0, size = 6, margin = margin(t = 10))) + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "WMS Shirk Tolerance (Index: 1-5)", 
+       y = "Preferences - Trust (Standardized Score)",
+       caption = "A higher WMS score means the organization demonstrates robust and proactive talent management practices.") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_wms_slope_12 ,
+      "\nN countries: ", n_countries_6)) 
+
+```
+
+# Economic Preferences vs Tightness-Looseness
+
+The following code chunk generates scatterplots with regression lines by plotting economic preferences (patience, risk-taking, reciprocity, altruism, and trust) against Tightness-Loosenes values. 
+
+
+```{r}
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_tl_1 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_patience)) %>%
+  lm(preferences_patience ~ tightness_score, 
+     data = .)
+
+ep_tl_slope_1   <- round(coef(ep_tl_1)[2], 3)
+
+n_countries_7 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_patience)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p25 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(preferences_patience)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = preferences_patience)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Tightness-Looseness (Index)", 
+       y = "Preferences - Patience (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_tl_slope_1 ,
+      "\nN countries: ", n_countries_7))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_tl_2 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_risktaking)) %>%
+  lm(preferences_risktaking ~ tightness_score, 
+     data = .)
+
+ep_tl_slope_2   <- round(coef(ep_tl_2)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+
+p26 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(preferences_risktaking)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = preferences_risktaking)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Tightness-Looseness (Index)", 
+       y = "Preferences - Risk Taking (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_tl_slope_2 ,
+      "\nN countries: ", n_countries_7))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_tl_3 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_risktaking)) %>%
+  lm(preferences_risktaking ~ tightness_score, 
+     data = .)
+
+ep_tl_slope_3   <- round(coef(ep_tl_3)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p27 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_posrecip)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = preferences_posrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Tightness-Looseness (Index)", 
+       y = "Preferences - Positive Reciprocity (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_tl_slope_3 ,
+      "\nN countries: ", n_countries_7))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_tl_4 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_negrecip)) %>%
+  lm(preferences_negrecip ~ tightness_score, 
+     data = .)
+
+ep_tl_slope_4   <- round(coef(ep_tl_4)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------    
+p28 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(preferences_negrecip)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = preferences_negrecip)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Tightness-Looseness (Index)", 
+       y = "Preferences - Negative Reciprocity (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_tl_slope_4 ,
+      "\nN countries: ", n_countries_7))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_tl_5 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_altruism)) %>%
+  lm(preferences_altruism ~ tightness_score, 
+     data = .)
+
+ep_tl_slope_5   <- round(coef(ep_tl_5)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------
+
+p29 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(preferences_altruism)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = preferences_altruism)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) + 
+  labs(title = "title", 
+       x = "Tightness-Looseness (Index)", 
+       y = "Preferences - Altruism (Standardized Score)") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_tl_slope_5 ,
+      "\nN countries: ", n_countries_7))
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+ep_tl_6 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(preferences_trust)) %>%
+  lm(preferences_trust ~ tightness_score, 
+     data = .)
+
+ep_tl_slope_6   <- round(coef(ep_tl_6)[2], 3)
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------
+
+p30 <- consolidated_data %>% 
+  filter(!is.na(tightness_score) & !is.na(preferences_trust)) %>%
+  ggplot(aes(x = tightness_score, 
+             y = preferences_trust)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  theme_minimal() + 
+  theme(legend.position = "none") + 
+  geom_text_repel(aes(label = ISO_code), 
+                  max.overlaps = 20) +  
+  labs(title = "title", 
+       x = "Tightness-Looseness (Index)",
+       y = "Preferences - Trust (Standardized Score)")  + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Slope: ", ep_tl_slope_5 ,
+      "\nN countries: ", n_countries_7))
+
+
+
+```
+
+# Tightness-Looseness vs Hour-Wage Elasticity
+
+The following code chunk generates scatterplots with regression lines by plotting Hour-wage elasticity against Tightness-Looseness scores. 
+
+
+```{r}
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+male_lm_1 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(elasticity_male)) %>%
+  lm(elasticity_male ~ tightness_score, 
+     data = .)
+
+male_slope_1   <- round(coef(male_lm_1)[2], 3)
+
+female_lm_1 <- consolidated_data %>%
+  filter(!is.na(tightness_score) & !is.na(elasticity_female)) %>%
+  lm(elasticity_female ~ tightness_score, 
+     data = .)
+
+female_slope_1 <- round(coef(female_lm_1)[2], 3)
+
+n_countries_8 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(tightness_score)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+p31 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(tightness_score)) %>%
+  ggplot(aes(x = tightness_score)) + 
+  #male elasticity line
+  geom_point(aes(y = elasticity_male, 
+                 color = "Male")) + 
+  geom_smooth(aes(y = elasticity_male, 
+                  color = "Male"), 
+              method = "lm") +
+  geom_text_repel(aes(x = tightness_score, 
+                      y = elasticity_male,
+                      color = "Male",
+                      label = ISO_code), 
+                  max.overlaps = 20) + 
+  #female elasticity line 
+  geom_point(aes(y = elasticity_female,
+                 color = "Female")) + 
+  geom_smooth(aes(y = elasticity_female, 
+                  color = "Female"), 
+              method = "lm") + 
+  geom_text_repel(aes(x = tightness_score, 
+                      y = elasticity_female,
+                      color = "Female",
+                      label = ISO_code), 
+                  max.overlaps = 20) +
+  theme_minimal() + 
+  theme() + 
+  labs(title = "S", 
+       x = "Tightness-Looseness (Index)", 
+       y =  "Hours–Wage Elasticity") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Male slope: ", male_slope_1,
+      "\nFemale slope: ", female_slope_1,
+      "\nN countries: ", n_countries_8))
+
+
+```
+
+
+# Responsibilism vs Hour-Wage Elasticity
+
+The following code chunk generates scatterplots with regression lines by plotting Responsibilism scores against Hour-Wage Elasticity. 
+
+```{r}
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+
+male_lm_2 <- consolidated_data %>%
+  filter(!is.na(Responsibilism) & !is.na(elasticity_male)) %>%
+  lm(elasticity_male ~ Responsibilism, 
+     data = .)
+
+male_slope_2   <- round(coef(male_lm_2)[2], 3)
+
+female_lm_2 <- consolidated_data %>%
+  filter(!is.na(Responsibilism) & !is.na(elasticity_female)) %>%
+  lm(elasticity_female ~ Responsibilism, 
+     data = .)
+
+female_slope_2 <- round(coef(female_lm_2)[2], 3)
+
+n_countries_9 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(Responsibilism)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+
+p32 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(Responsibilism)) %>%
+  ggplot(aes(x = Responsibilism)) + 
+  #male elasticity line
+  geom_point(aes(y = elasticity_male, 
+                 color = "Male")) + 
+  geom_smooth(aes(y = elasticity_male, 
+                  color = "Male"), 
+              method = "lm") +
+  geom_text_repel(aes(x = Responsibilism, 
+                      y = elasticity_male,
+                      color = "Male",
+                      label = ISO_code), 
+                  max.overlaps = 20) + 
+  #female elasticity line 
+  geom_point(aes(y = elasticity_female,
+                 color = "Female")) + 
+  geom_smooth(aes(y = elasticity_female, 
+                  color = "Female"), 
+              method = "lm") + 
+  geom_text_repel(aes(x = Responsibilism, 
+                      y = elasticity_female,
+                      color = "Female",
+                      label = ISO_code), 
+                  max.overlaps = 20) +
+  theme_minimal() + 
+  theme() + 
+  labs(title = "S", 
+       x = "Responsibilism (Scale 0-100)", 
+       y =  "Hours–Wage Elasticity") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Male slope: ", male_slope_2,
+      "\nFemale slope: ", female_slope_2,
+      "\nN countries: ", n_countries_9))
+
+print(p32)
+
+```
+
+
+
+# Universalism vs Hour-Wage Elasticity
+
+The following code chunk generates scatterplots with regression lines by plotting Domestic and Foreign Universalism scores against Hour-Wage Elasticity. 
+
+```{r}
+
+
+# -----------------------------------extracting slope coefficients----------------------------------------------------------                    
+
+male_lm_f <- consolidated_data %>%
+  filter(!is.na(foreign_universalism) & !is.na(elasticity_male)) %>%
+  lm(elasticity_male ~ foreign_universalism, 
+     data = .)
+
+male_slope_f   <- round(coef(male_lm_f)[2], 3)
+
+female_lm_f <- consolidated_data %>%
+  filter(!is.na(foreign_universalism) & !is.na(elasticity_female)) %>%
+  lm(elasticity_female ~ foreign_universalism, 
+     data = .)
+
+female_slope_f <- round(coef(female_lm_f)[2], 3)
+
+male_lm_d <- consolidated_data %>%
+  filter(!is.na(domestic_universalism) & !is.na(elasticity_male)) %>%
+  lm(elasticity_male ~ domestic_universalism, 
+     data = .)
+
+male_slope_d   <- round(coef(male_lm_d)[2], 3)
+
+female_lm_d <- consolidated_data %>%
+  filter(!is.na(domestic_universalism) & !is.na(elasticity_female)) %>%
+  lm(elasticity_female ~ domestic_universalism, 
+     data = .)
+
+female_slope_d <- round(coef(female_lm_d)[2], 3)
+
+n_countries_10 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(domestic_universalism)) %>%
+  distinct(ISO_code) %>%
+  nrow()
+
+# ----------------------------------------------plotting the graph----------------------------------------------------------                    
+
+p33 <- consolidated_data %>%
+  filter(!is.na(elasticity_male) & !is.na(domestic_universalism)) %>%
+  ggplot() + 
+  #male elasticity line - Domestic
+  geom_point(aes(x = domestic_universalism, 
+                 y = elasticity_male, 
+                 color = "Male Elasticity ~ Domestic")) + 
+  geom_smooth(aes(x = domestic_universalism, 
+                  y = elasticity_male, 
+                  color = "Male Elasticity ~ Domestic"), 
+              method = "lm") +
+  geom_text_repel(aes(x = domestic_universalism, 
+                      y = elasticity_male,
+                      color = "Male Elasticity ~ Domestic",
+                      label = ISO_code), 
+                  max.overlaps = 20) + 
+  #male elasticity line - Foreign 
+  geom_point(aes(x = foreign_universalism, 
+                 y = elasticity_male, 
+                 color = "Male Elasticity ~ Foreign")) + 
+  geom_smooth(aes(x = foreign_universalism, 
+                  y = elasticity_male, 
+                  color = "Male Elasticity ~ Foreign"), 
+              method = "lm") +
+  geom_text_repel(aes(x = foreign_universalism, 
+                      y = elasticity_male,
+                      color = "Male Elasticity ~ Foreign",
+                      label = ISO_code), 
+                  max.overlaps = 20) + 
+  theme_minimal() + 
+  theme() + 
+  labs(title = "S", 
+       x = "Universalism (Scale 0-100)", 
+       y =  "Hours–Wage Elasticity") + 
+  annotate(
+    "text",
+    x = Inf,          # right side
+    y = Inf,          # top
+    hjust = 1.2,      # shift slightly
+    vjust = 1.2,
+    size = 3,
+    label = paste0(
+      "Male Domestic slope: ", male_slope_d,
+      "\nMale Foreign slope: ", male_slope_f,
+      "\nN countries: ", n_countries_10))
+
+print(p33)
+
+```
+
+
+
+
+Saving Plots to PDF
+
+```{r}
+
+pdf("Figures/Correlation_Graphs.pdf")   # All subsequent plots go into this PDF
+
+
+for (i in 1:32) {
+  
+  plot_name <- paste0("p", i) 
+  print(get(plot_name))
+  
+}
+  
+dev.off()
+
+
+
+```
+
+
+
