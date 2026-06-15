@@ -33,7 +33,6 @@ The analysis draws on data consolidated from the following published datasets an
 | GDP per capita and income classifications | World Bank |
 | Cultural tightness (industrial societies) | Gelfand et al. (2011), "Differences Between Tight and Loose Cultures: A 33-Nation Study" |
 | Economic preferences | Falk et al. (2018), "Global Evidence on Economic Preferences" |
-| Responsibilism scores | (source to be added) |
 
 Country names across datasets were standardized using manually created translation tables to ensure consistent merging.
 
