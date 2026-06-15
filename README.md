@@ -4,22 +4,21 @@ This repository contains the R analysis code from an independent research projec
 
 ## About this repository
 
-**This is a coding sample, not a complete replication package.** It is intended to demonstrate my approach to data harmonization, cleaning, statistical analysis, and reproducible workflows in R. The underlying raw datasets are not distributed here, so the notebooks are provided as rendered HTML (`.nb.html`) that display the code alongside its output, tables, and figures rather than as a runnable end-to-end pipeline.
+**This is a coding sample, not a complete replication package.** It is intended to demonstrate my approach to data harmonization, cleaning, statistical analysis, and reproducible workflows in R. The underlying raw datasets are not distributed here, so the code is provided as R Markdown (`.Rmd`) notebooks to illustrate the analysis rather than as a runnable end-to-end pipeline.
 
 ## Contents
 
-Each file is an R Notebook showing code and results.
+Each file is an R Markdown notebook.
 
 | File | Description |
 |------|-------------|
-| `1.Master_Data.nb.html` | Data consolidation and cleaning. Merges all source datasets into a single harmonized panel, reconciling country names and codes across sources, recoding variables, and handling and flagging missing values. |
-| `2.Correlation_Graphs.nb.html` | Correlation analysis and visualizations exploring relationships between the key cultural and economic variables. |
-| `3.Regression_Tables.nb.html` | The main statistical analysis, producing regression tables for the four outcomes studied: shirk intolerance and bonus culture prevalence (both derived from the World Management Survey), total factor productivity (TFP), and labour supply elasticity. |
-| `4.Responsibilism_Graphs.nb.html` | Visualizations relating to the responsibilism (shirk intolerance) measures. |
-| `4.WMS_Graphs.nb.html` | Visualizations based on the World Management Survey data. |
-| `5.Bilingual_Study.nb.html` | A supplementary analysis examining bilingualism. |
-| `6.Elasticity_Graphs.nb.html` | Visualizations relating to the labour supply elasticity measures. |
-| `7.TFP_Graphs.nb.html` | Visualizations relating to total factor productivity (TFP). |
+| `1.Master_Data.Rmd` | Data consolidation and cleaning. Merges all source datasets into a single harmonized panel, reconciling country names and codes across sources, recoding variables, and handling and flagging missing values. |
+| `2.Correlation_Graphs.Rmd` | Correlation analysis and visualizations exploring relationships between the key cultural and economic variables. |
+| `3.Regression_Tables.Rmd` | The main statistical analysis, producing regression tables for the four outcomes studied: shirk intolerance and bonus culture prevalence (both derived from the World Management Survey), total factor productivity (TFP), and labour supply elasticity. |
+| `4.WMS_Graphs.Rmd` | Visualizations based on the World Management Survey data. |
+| `5.Bilingual_Study.Rmd` | A supplementary analysis examining bilingualism. |
+| `6.Elasticity_Graphs.Rmd` | Visualizations relating to the labour supply elasticity measures. |
+| `7.TFP_Graphs.Rmd` | Visualizations relating to total factor productivity (TFP). |
 
 ## Data sources
 
